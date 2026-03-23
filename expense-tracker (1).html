@@ -1,0 +1,979 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ledger — Secure Expense Tracker</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
+
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #111118;
+    --surface2: #1a1a24;
+    --border: #2a2a3a;
+    --accent: #c8f04a;
+    --accent2: #7b5ea7;
+    --text: #e8e8f0;
+    --muted: #6b6b80;
+    --danger: #ff4d6d;
+    --success: #4dffa0;
+    --card-shadow: 0 0 0 1px var(--border), 0 8px 32px rgba(0,0,0,0.4);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'DM Mono', monospace;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Background texture */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 80% 50% at 20% 20%, rgba(123,94,167,0.08) 0%, transparent 60%),
+      radial-gradient(ellipse 60% 40% at 80% 80%, rgba(200,240,74,0.05) 0%, transparent 50%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ─── AUTH SCREEN ─── */
+  #auth-screen {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+    padding: 1rem;
+  }
+
+  .auth-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 2.5rem;
+    width: 100%;
+    max-width: 400px;
+    box-shadow: var(--card-shadow);
+    animation: slideUp 0.4s cubic-bezier(0.16,1,0.3,1);
+  }
+
+  @keyframes slideUp {
+    from { opacity: 0; transform: translateY(24px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .logo {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 2rem;
+    letter-spacing: -0.03em;
+    color: var(--accent);
+    margin-bottom: 0.25rem;
+  }
+
+  .logo span { color: var(--muted); }
+
+  .auth-tagline {
+    color: var(--muted);
+    font-size: 0.75rem;
+    margin-bottom: 2rem;
+    letter-spacing: 0.05em;
+  }
+
+  .tab-row {
+    display: flex;
+    gap: 0.25rem;
+    background: var(--bg);
+    border-radius: 8px;
+    padding: 4px;
+    margin-bottom: 1.5rem;
+  }
+
+  .tab-btn {
+    flex: 1;
+    padding: 0.5rem;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--muted);
+    font-family: 'DM Mono', monospace;
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 0.05em;
+  }
+
+  .tab-btn.active {
+    background: var(--surface2);
+    color: var(--accent);
+  }
+
+  .field {
+    margin-bottom: 1rem;
+  }
+
+  .field label {
+    display: block;
+    font-size: 0.65rem;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 0.4rem;
+  }
+
+  .field input, .field select {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.7rem 0.9rem;
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-size: 0.85rem;
+    transition: border-color 0.2s;
+    outline: none;
+  }
+
+  .field input:focus, .field select:focus {
+    border-color: var(--accent);
+  }
+
+  .field input::placeholder { color: var(--muted); }
+
+  .btn-primary {
+    width: 100%;
+    padding: 0.8rem;
+    background: var(--accent);
+    border: none;
+    border-radius: 8px;
+    color: #0a0a0f;
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 0.9rem;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-top: 0.5rem;
+  }
+
+  .btn-primary:hover { background: #d4f55a; transform: translateY(-1px); }
+  .btn-primary:active { transform: translateY(0); }
+
+  .error-msg {
+    background: rgba(255,77,109,0.1);
+    border: 1px solid rgba(255,77,109,0.3);
+    border-radius: 6px;
+    padding: 0.6rem 0.9rem;
+    color: var(--danger);
+    font-size: 0.75rem;
+    margin-bottom: 1rem;
+    display: none;
+  }
+
+  .strength-bar {
+    height: 3px;
+    border-radius: 2px;
+    background: var(--border);
+    margin-top: 0.4rem;
+    overflow: hidden;
+  }
+
+  .strength-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.3s, background 0.3s;
+    width: 0%;
+  }
+
+  /* ─── MAIN APP ─── */
+  #app-screen {
+    display: none;
+    min-height: 100vh;
+    position: relative;
+    z-index: 1;
+  }
+
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.2rem 2rem;
+    border-bottom: 1px solid var(--border);
+    background: rgba(10,10,15,0.8);
+    backdrop-filter: blur(12px);
+    position: sticky;
+    top: 0;
+    z-index: 5;
+  }
+
+  .topbar-logo {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 1.4rem;
+    color: var(--accent);
+    letter-spacing: -0.02em;
+  }
+
+  .user-pill {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 0.4rem 0.9rem 0.4rem 0.4rem;
+    font-size: 0.75rem;
+  }
+
+  .avatar {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    background: var(--accent2);
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 0.7rem;
+    color: white;
+  }
+
+  .logout-btn {
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-family: 'DM Mono', monospace;
+    font-size: 0.7rem;
+    cursor: pointer;
+    margin-left: 0.5rem;
+    letter-spacing: 0.05em;
+    transition: color 0.2s;
+  }
+
+  .logout-btn:hover { color: var(--danger); }
+
+  .main-grid {
+    display: grid;
+    grid-template-columns: 340px 1fr;
+    gap: 1.5rem;
+    padding: 1.5rem 2rem;
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+
+  @media (max-width: 760px) {
+    .main-grid { grid-template-columns: 1fr; }
+  }
+
+  /* ─── SUMMARY CARDS ─── */
+  .summary-strip {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 0.75rem;
+    margin-bottom: 1.5rem;
+    grid-column: 1 / -1;
+  }
+
+  .summary-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.2rem 1.4rem;
+    animation: fadeIn 0.4s ease both;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .summary-label {
+    font-size: 0.62rem;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 0.4rem;
+  }
+
+  .summary-value {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 1.5rem;
+    letter-spacing: -0.02em;
+  }
+
+  .summary-value.green { color: var(--accent); }
+  .summary-value.red   { color: var(--danger); }
+
+  /* ─── ADD FORM ─── */
+  .add-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 1.5rem;
+    height: fit-content;
+    position: sticky;
+    top: 80px;
+  }
+
+  .card-title {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 1rem;
+    margin-bottom: 1.2rem;
+    letter-spacing: -0.01em;
+  }
+
+  .btn-secondary {
+    width: 100%;
+    padding: 0.7rem;
+    background: transparent;
+    border: 1px solid var(--accent);
+    border-radius: 8px;
+    color: var(--accent);
+    font-family: 'Syne', sans-serif;
+    font-weight: 600;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-top: 0.5rem;
+  }
+
+  .btn-secondary:hover { background: rgba(200,240,74,0.08); }
+
+  /* ─── EXPENSE LIST ─── */
+  .list-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 1.5rem;
+  }
+
+  .list-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+  }
+
+  .filter-row {
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .filter-chip {
+    padding: 0.3rem 0.75rem;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted);
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65rem;
+    cursor: pointer;
+    letter-spacing: 0.05em;
+    transition: all 0.2s;
+  }
+
+  .filter-chip.active {
+    background: var(--accent);
+    color: #0a0a0f;
+    border-color: var(--accent);
+  }
+
+  .expense-list { display: flex; flex-direction: column; gap: 0.6rem; }
+
+  .expense-item {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.9rem 1rem;
+    background: var(--surface2);
+    border-radius: 10px;
+    border: 1px solid transparent;
+    transition: border-color 0.2s;
+    animation: fadeIn 0.3s ease both;
+  }
+
+  .expense-item:hover { border-color: var(--border); }
+
+  .cat-icon {
+    width: 36px; height: 36px;
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1rem;
+    flex-shrink: 0;
+  }
+
+  .expense-info { flex: 1; min-width: 0; }
+
+  .expense-name {
+    font-size: 0.85rem;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .expense-meta {
+    font-size: 0.65rem;
+    color: var(--muted);
+    margin-top: 0.1rem;
+    letter-spacing: 0.03em;
+  }
+
+  .expense-amount {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    color: var(--danger);
+    font-size: 0.95rem;
+    flex-shrink: 0;
+  }
+
+  .del-btn {
+    background: none;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: color 0.2s;
+    padding: 0.2rem;
+  }
+
+  .del-btn:hover { color: var(--danger); }
+
+  .empty-state {
+    text-align: center;
+    padding: 3rem 1rem;
+    color: var(--muted);
+    font-size: 0.8rem;
+    letter-spacing: 0.05em;
+  }
+
+  .empty-state .empty-icon {
+    font-size: 2.5rem;
+    margin-bottom: 0.75rem;
+    opacity: 0.4;
+  }
+
+  .char-count {
+    font-size: 0.65rem;
+    color: var(--muted);
+    text-align: right;
+    margin-top: 0.2rem;
+  }
+  .char-count.warn { color: var(--danger); }
+
+  .security-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.6rem;
+    color: var(--success);
+    letter-spacing: 0.08em;
+    background: rgba(77,255,160,0.08);
+    border: 1px solid rgba(77,255,160,0.2);
+    border-radius: 999px;
+    padding: 0.2rem 0.6rem;
+    margin-top: 1rem;
+  }
+</style>
+</head>
+<body>
+
+<!-- ── AUTH SCREEN ── -->
+<div id="auth-screen">
+  <div class="auth-card">
+    <div class="logo">Ledger<span>.</span></div>
+    <div class="auth-tagline">// SECURE EXPENSE TRACKER v1.0</div>
+
+    <div class="tab-row">
+      <button class="tab-btn active" onclick="switchTab('login')">LOGIN</button>
+      <button class="tab-btn" onclick="switchTab('register')">REGISTER</button>
+    </div>
+
+    <div id="auth-error" class="error-msg"></div>
+
+    <!-- LOGIN FORM -->
+    <div id="login-form">
+      <div class="field">
+        <label>Username</label>
+        <input type="text" id="login-user" placeholder="your_username" maxlength="32" autocomplete="username">
+      </div>
+      <div class="field">
+        <label>Password</label>
+        <input type="password" id="login-pass" placeholder="••••••••" maxlength="128" autocomplete="current-password">
+      </div>
+      <button class="btn-primary" onclick="handleLogin()">SIGN IN →</button>
+      <div class="security-badge">🔒 PASSWORDS HASHED WITH SHA-256 + SALT</div>
+    </div>
+
+    <!-- REGISTER FORM -->
+    <div id="register-form" style="display:none">
+      <div class="field">
+        <label>Username</label>
+        <input type="text" id="reg-user" placeholder="choose_username" maxlength="32"
+               oninput="validateUsername(this)" autocomplete="username">
+      </div>
+      <div class="field">
+        <label>Password</label>
+        <input type="password" id="reg-pass" placeholder="min 8 characters" maxlength="128"
+               oninput="checkStrength(this.value)" autocomplete="new-password">
+        <div class="strength-bar"><div class="strength-fill" id="strength-fill"></div></div>
+      </div>
+      <div class="field">
+        <label>Confirm Password</label>
+        <input type="password" id="reg-pass2" placeholder="repeat password" maxlength="128" autocomplete="new-password">
+      </div>
+      <button class="btn-primary" onclick="handleRegister()">CREATE ACCOUNT →</button>
+      <div class="security-badge">🔒 PASSWORDS HASHED WITH SHA-256 + SALT</div>
+    </div>
+  </div>
+</div>
+
+<!-- ── MAIN APP ── -->
+<div id="app-screen">
+  <div class="topbar">
+    <div class="topbar-logo">Ledger.</div>
+    <div style="display:flex;align-items:center;gap:0.5rem">
+      <div class="user-pill">
+        <div class="avatar" id="user-avatar">?</div>
+        <span id="user-display">user</span>
+        <button class="logout-btn" onclick="handleLogout()">[ LOGOUT ]</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="main-grid">
+    <!-- Summary strip -->
+    <div class="summary-strip">
+      <div class="summary-card" style="animation-delay:0s">
+        <div class="summary-label">Total Spent</div>
+        <div class="summary-value red" id="total-spent">$0.00</div>
+      </div>
+      <div class="summary-card" style="animation-delay:0.05s">
+        <div class="summary-label">This Month</div>
+        <div class="summary-value" id="month-spent">$0.00</div>
+      </div>
+      <div class="summary-card" style="animation-delay:0.1s">
+        <div class="summary-label">Entries</div>
+        <div class="summary-value green" id="entry-count">0</div>
+      </div>
+    </div>
+
+    <!-- Add expense -->
+    <div class="add-card">
+      <div class="card-title">+ Add Expense</div>
+
+      <div id="add-error" class="error-msg"></div>
+
+      <div class="field">
+        <label>Description</label>
+        <input type="text" id="exp-desc" placeholder="e.g. Coffee, Rent..."
+               maxlength="60" oninput="updateCharCount(this, 'desc-count', 60)">
+        <div class="char-count" id="desc-count">0 / 60</div>
+      </div>
+
+      <div class="field">
+        <label>Amount ($)</label>
+        <input type="number" id="exp-amount" placeholder="0.00"
+               min="0.01" max="999999" step="0.01">
+      </div>
+
+      <div class="field">
+        <label>Category</label>
+        <select id="exp-cat">
+          <option value="food">🍔 Food & Drink</option>
+          <option value="transport">🚗 Transport</option>
+          <option value="housing">🏠 Housing</option>
+          <option value="health">💊 Health</option>
+          <option value="entertainment">🎮 Entertainment</option>
+          <option value="shopping">🛍️ Shopping</option>
+          <option value="other">📦 Other</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label>Date</label>
+        <input type="date" id="exp-date">
+      </div>
+
+      <button class="btn-primary" onclick="addExpense()">ADD EXPENSE</button>
+      <button class="btn-secondary" onclick="clearAll()">CLEAR ALL DATA</button>
+    </div>
+
+    <!-- Expense list -->
+    <div class="list-card">
+      <div class="list-header">
+        <div class="card-title" style="margin:0">Transactions</div>
+        <div class="filter-row">
+          <button class="filter-chip active" onclick="setFilter('all', this)">ALL</button>
+          <button class="filter-chip" onclick="setFilter('food', this)">FOOD</button>
+          <button class="filter-chip" onclick="setFilter('transport', this)">TRAVEL</button>
+          <button class="filter-chip" onclick="setFilter('entertainment', this)">FUN</button>
+        </div>
+      </div>
+      <div class="expense-list" id="expense-list">
+        <div class="empty-state">
+          <div class="empty-icon">📊</div>
+          <div>No expenses yet.<br>Add your first entry →</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════
+// SECURITY FEATURE #1: PASSWORD HASHING
+// We use SHA-256 + a per-user salt so passwords
+// are never stored in plain text.
+// ═══════════════════════════════════════════
+
+async function sha256(message) {
+  const msgBuffer = new TextEncoder().encode(message);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+function generateSalt() {
+  const arr = new Uint8Array(16);
+  crypto.getRandomValues(arr);
+  return Array.from(arr).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+
+async function hashPassword(password, salt) {
+  return await sha256(salt + password + salt);
+}
+
+// ═══════════════════════════════════════════
+// SECURITY FEATURE #2: INPUT SANITIZATION
+// All user-generated text is sanitized with
+// DOMPurify before being rendered in the DOM.
+// This prevents XSS attacks.
+// ═══════════════════════════════════════════
+
+function sanitize(str) {
+  // DOMPurify strips any HTML/script tags
+  return DOMPurify.sanitize(String(str).trim());
+}
+
+// Additional: validate that a value is a safe positive number
+function sanitizeAmount(val) {
+  const num = parseFloat(val);
+  if (isNaN(num) || num <= 0 || num > 999999) return null;
+  return Math.round(num * 100) / 100; // max 2 decimal places
+}
+
+// Username: only allow alphanumeric + underscore
+function isValidUsername(username) {
+  return /^[a-zA-Z0-9_]{3,32}$/.test(username);
+}
+
+// Password strength checker
+function checkStrength(pass) {
+  const fill = document.getElementById('strength-fill');
+  let score = 0;
+  if (pass.length >= 8) score++;
+  if (/[A-Z]/.test(pass)) score++;
+  if (/[0-9]/.test(pass)) score++;
+  if (/[^A-Za-z0-9]/.test(pass)) score++;
+  const colors = ['', '#ff4d6d', '#ffb347', '#c8f04a', '#4dffa0'];
+  const widths = ['0%', '25%', '50%', '75%', '100%'];
+  fill.style.width = widths[score];
+  fill.style.background = colors[score] || '';
+}
+
+// ═══════════════════════════════════════════
+// USER STORE (localStorage — no sensitive
+// data, only hashed credentials + expenses)
+// ═══════════════════════════════════════════
+
+function getUsers() {
+  return JSON.parse(localStorage.getItem('ledger_users') || '{}');
+}
+function saveUsers(users) {
+  localStorage.setItem('ledger_users', JSON.stringify(users));
+}
+function getSession() {
+  return sessionStorage.getItem('ledger_session');
+}
+function setSession(username) {
+  // NOTE: we use sessionStorage (not localStorage) for sessions
+  // so they expire when the tab is closed
+  sessionStorage.setItem('ledger_session', username);
+}
+function clearSession() {
+  sessionStorage.removeItem('ledger_session');
+}
+function getExpenses(username) {
+  return JSON.parse(localStorage.getItem('ledger_exp_' + username) || '[]');
+}
+function saveExpenses(username, expenses) {
+  localStorage.setItem('ledger_exp_' + username, JSON.stringify(expenses));
+}
+
+// ═══════════════════════════════════════════
+// AUTH LOGIC
+// ═══════════════════════════════════════════
+
+let currentUser = null;
+let activeFilter = 'all';
+
+function switchTab(tab) {
+  document.querySelectorAll('.tab-btn').forEach((b,i) => {
+    b.classList.toggle('active', (i===0 && tab==='login') || (i===1 && tab==='register'));
+  });
+  document.getElementById('login-form').style.display = tab === 'login' ? '' : 'none';
+  document.getElementById('register-form').style.display = tab === 'register' ? '' : 'none';
+  showAuthError('');
+}
+
+function showAuthError(msg) {
+  const el = document.getElementById('auth-error');
+  el.textContent = msg;
+  el.style.display = msg ? 'block' : 'none';
+}
+
+function validateUsername(input) {
+  if (input.value && !isValidUsername(input.value)) {
+    input.style.borderColor = 'var(--danger)';
+  } else {
+    input.style.borderColor = '';
+  }
+}
+
+async function handleRegister() {
+  const username = document.getElementById('reg-user').value.trim();
+  const password = document.getElementById('reg-pass').value;
+  const password2 = document.getElementById('reg-pass2').value;
+
+  if (!isValidUsername(username)) {
+    return showAuthError('Username must be 3-32 chars: letters, numbers, underscores only.');
+  }
+  if (password.length < 8) {
+    return showAuthError('Password must be at least 8 characters.');
+  }
+  if (password !== password2) {
+    return showAuthError('Passwords do not match.');
+  }
+
+  const users = getUsers();
+  if (users[username]) {
+    return showAuthError('Username already taken.');
+  }
+
+  const salt = generateSalt();
+  const hash = await hashPassword(password, salt);
+
+  users[username] = { hash, salt };
+  saveUsers(users);
+
+  showAuthError('');
+  switchTab('login');
+  document.getElementById('login-user').value = username;
+  document.getElementById('auth-error').style.background = 'rgba(77,255,160,0.1)';
+  document.getElementById('auth-error').style.borderColor = 'rgba(77,255,160,0.3)';
+  document.getElementById('auth-error').style.color = 'var(--success)';
+  document.getElementById('auth-error').style.display = 'block';
+  document.getElementById('auth-error').textContent = '✓ Account created. Please sign in.';
+}
+
+async function handleLogin() {
+  const username = document.getElementById('login-user').value.trim();
+  const password = document.getElementById('login-pass').value;
+
+  if (!username || !password) {
+    return showAuthError('Please fill in all fields.');
+  }
+
+  const users = getUsers();
+  const user = users[username];
+
+  if (!user) {
+    return showAuthError('Invalid username or password.');
+  }
+
+  const hash = await hashPassword(password, user.salt);
+
+  if (hash !== user.hash) {
+    return showAuthError('Invalid username or password.');
+  }
+
+  setSession(username);
+  enterApp(username);
+}
+
+function handleLogout() {
+  clearSession();
+  currentUser = null;
+  document.getElementById('app-screen').style.display = 'none';
+  document.getElementById('auth-screen').style.display = 'flex';
+  document.getElementById('login-pass').value = '';
+}
+
+function enterApp(username) {
+  currentUser = username;
+  document.getElementById('auth-screen').style.display = 'none';
+  document.getElementById('app-screen').style.display = 'block';
+  document.getElementById('user-display').textContent = username;
+  document.getElementById('user-avatar').textContent = username[0].toUpperCase();
+  // Set today's date as default
+  document.getElementById('exp-date').value = new Date().toISOString().split('T')[0];
+  renderExpenses();
+  updateSummary();
+}
+
+// ═══════════════════════════════════════════
+// EXPENSE LOGIC
+// ═══════════════════════════════════════════
+
+const CAT_META = {
+  food: { icon: '🍔', bg: 'rgba(255,179,71,0.12)' },
+  transport: { icon: '🚗', bg: 'rgba(77,160,255,0.12)' },
+  housing: { icon: '🏠', bg: 'rgba(200,240,74,0.12)' },
+  health: { icon: '💊', bg: 'rgba(77,255,160,0.12)' },
+  entertainment: { icon: '🎮', bg: 'rgba(123,94,167,0.2)' },
+  shopping: { icon: '🛍️', bg: 'rgba(255,77,109,0.12)' },
+  other: { icon: '📦', bg: 'rgba(107,107,128,0.2)' },
+};
+
+function showAddError(msg) {
+  const el = document.getElementById('add-error');
+  el.textContent = msg;
+  el.style.display = msg ? 'block' : 'none';
+}
+
+function addExpense() {
+  // SECURITY: sanitize all inputs before use
+  const rawDesc = document.getElementById('exp-desc').value;
+  const rawAmount = document.getElementById('exp-amount').value;
+  const rawCat = document.getElementById('exp-cat').value;
+  const rawDate = document.getElementById('exp-date').value;
+
+  const desc = sanitize(rawDesc);
+  const amount = sanitizeAmount(rawAmount);
+  const cat = ['food','transport','housing','health','entertainment','shopping','other']
+                .includes(rawCat) ? rawCat : 'other'; // whitelist check
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : new Date().toISOString().split('T')[0];
+
+  if (!desc) return showAddError('Please enter a description.');
+  if (amount === null) return showAddError('Please enter a valid amount (0.01 – 999,999).');
+
+  showAddError('');
+
+  const expenses = getExpenses(currentUser);
+  expenses.unshift({
+    id: Date.now(),
+    desc,   // stored sanitized
+    amount,
+    cat,
+    date,
+  });
+  saveExpenses(currentUser, expenses);
+
+  document.getElementById('exp-desc').value = '';
+  document.getElementById('exp-amount').value = '';
+  document.getElementById('desc-count').textContent = '0 / 60';
+
+  renderExpenses();
+  updateSummary();
+}
+
+function deleteExpense(id) {
+  const expenses = getExpenses(currentUser).filter(e => e.id !== id);
+  saveExpenses(currentUser, expenses);
+  renderExpenses();
+  updateSummary();
+}
+
+function setFilter(cat, btn) {
+  activeFilter = cat;
+  document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+  btn.classList.add('active');
+  renderExpenses();
+}
+
+function renderExpenses() {
+  const expenses = getExpenses(currentUser);
+  const filtered = activeFilter === 'all' ? expenses : expenses.filter(e => e.cat === activeFilter);
+  const list = document.getElementById('expense-list');
+
+  if (filtered.length === 0) {
+    list.innerHTML = `<div class="empty-state"><div class="empty-icon">📊</div><div>No expenses yet.<br>Add your first entry →</div></div>`;
+    return;
+  }
+
+  list.innerHTML = filtered.map(e => {
+    const meta = CAT_META[e.cat] || CAT_META.other;
+    // SECURITY: desc was already sanitized on input; using textContent
+    // equivalent via DOM creation to be double-safe (no innerHTML with user data)
+    return `<div class="expense-item">
+      <div class="cat-icon" style="background:${meta.bg}">${meta.icon}</div>
+      <div class="expense-info">
+        <div class="expense-name" id="ename-${e.id}"></div>
+        <div class="expense-meta">${e.cat.toUpperCase()} · ${e.date}</div>
+      </div>
+      <div class="expense-amount">-$${e.amount.toFixed(2)}</div>
+      <button class="del-btn" onclick="deleteExpense(${e.id})" title="Delete">✕</button>
+    </div>`;
+  }).join('');
+
+  // Set description via textContent (not innerHTML) for final XSS safety
+  filtered.forEach(e => {
+    const el = document.getElementById('ename-' + e.id);
+    if (el) el.textContent = e.desc;
+  });
+}
+
+function updateSummary() {
+  const expenses = getExpenses(currentUser);
+  const total = expenses.reduce((s, e) => s + e.amount, 0);
+
+  const now = new Date();
+  const monthTotal = expenses
+    .filter(e => {
+      const d = new Date(e.date);
+      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+    })
+    .reduce((s, e) => s + e.amount, 0);
+
+  document.getElementById('total-spent').textContent = '$' + total.toFixed(2);
+  document.getElementById('month-spent').textContent = '$' + monthTotal.toFixed(2);
+  document.getElementById('entry-count').textContent = expenses.length;
+}
+
+function clearAll() {
+  if (!confirm('Delete ALL your expenses? This cannot be undone.')) return;
+  saveExpenses(currentUser, []);
+  renderExpenses();
+  updateSummary();
+}
+
+function updateCharCount(input, counterId, max) {
+  const count = input.value.length;
+  const el = document.getElementById(counterId);
+  el.textContent = count + ' / ' + max;
+  el.classList.toggle('warn', count >= max * 0.9);
+}
+
+// ═══════════════════════════════════════════
+// INIT: check for existing session
+// ═══════════════════════════════════════════
+(function init() {
+  const session = getSession();
+  const users = getUsers();
+  if (session && users[session]) {
+    enterApp(session);
+  }
+})();
+</script>
+</body>
+</html>
